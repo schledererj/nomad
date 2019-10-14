@@ -82,6 +82,8 @@ const (
 	BatchNodeUpdateDrainRequestType
 	SchedulerConfigRequestType
 	NodeBatchDeregisterRequestType
+	CSIVolumeRegisterRequestType
+	CSIVolumeDeregisterRequestType
 )
 
 const (
