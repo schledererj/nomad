@@ -906,10 +906,10 @@ const (
 type TaskCSIPluginConfig struct {
 	// PluginID is the identifier of the plugin.
 	// Ideally this should be the FQDN of the plugin.
-	PluginID string `mapstructure:"id"`
+	PluginID string `mapstructure:"plugin_id"`
 
 	// CSIPluginType instructs Nomad on how to handle processing a plugin
-	PluginType CSIPluginType `mapstructure:"type"`
+	PluginType CSIPluginType `mapstructure:"plugin_type"`
 
 	// PluginMountDir is the destination that nomad should mount in its CSI
 	// directory for the plugin. It will then expect a file called CSISocketName
@@ -917,7 +917,7 @@ type TaskCSIPluginConfig struct {
 	// "PluginMountDir/CSIIntermediaryDirname/{VolumeName}/{AllocID} for mounts.
 	//
 	// Default is /csi.
-	PluginMountDir string `mapstructure:"mount_dir"`
+	PluginMountDir string `mapstructure:"plugin_mount_dir"`
 }
 
 func (t *TaskCSIPluginConfig) Canonicalize() {
