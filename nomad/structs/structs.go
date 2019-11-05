@@ -84,6 +84,7 @@ const (
 	NodeBatchDeregisterRequestType
 	CSIVolumeRegisterRequestType
 	CSIVolumeDeregisterRequestType
+	CSIVolumeClaimRequestType
 )
 
 const (
