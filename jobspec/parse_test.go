@@ -927,7 +927,7 @@ func TestParse(t *testing.T) {
 				TaskGroups: []*api.TaskGroup{
 					{
 						Name:          helper.StringToPtr("bar"),
-						ShutdownDelay: 14 * time.Second,
+						ShutdownDelay: helper.TimeToPtr(14 * time.Second),
 						Count:         helper.IntToPtr(3),
 						Networks: []*api.NetworkResource{
 							{
