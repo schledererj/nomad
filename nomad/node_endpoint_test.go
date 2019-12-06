@@ -11,6 +11,7 @@ import (
 	memdb "github.com/hashicorp/go-memdb"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/hashicorp/nomad/acl"
+	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/state"
@@ -3029,6 +3030,25 @@ func TestClientEndpoint_DeriveVaultToken_VaultError(t *testing.T) {
 	if resp.Error == nil || !resp.Error.IsRecoverable() {
 		t.Fatalf("bad: %+v", resp.Error)
 	}
+}
+
+func TestClientEndpoint_DeriveSIToken(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	s1 := TestServer(t, nil)
+	defer s1.Shutdown()
+
+	state := s1.fsm.State()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	_ = state
+	_ = codec
+	_ = r
+	s1.config.ConsulConfig.AllowUnauthenticated = helper.BoolToPtr(true)
+	// i want a consul client
+	// what does a server even have?
 }
 
 func TestClientEndpoint_EmitEvents(t *testing.T) {
