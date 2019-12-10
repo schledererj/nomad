@@ -93,6 +93,13 @@ type AgentAPI interface {
 	UpdateTTL(id, output, status string) error
 }
 
+// ACLsAPI is the consul/api.ACL API used by Nomad Server.
+type ACLsAPI interface {
+	TokenCreate(token *api.ACLToken, q *api.WriteOptions) (*api.ACLToken, *api.WriteMeta, error)
+	TokenDelete(tokenID string, q *api.WriteOptions) (*api.WriteMeta, error)
+	TokenList(q *api.QueryOptions) ([]*api.ACLTokenListEntry, *api.QueryMeta, error)
+}
+
 func agentServiceUpdateRequired(reg *api.AgentServiceRegistration, svc *api.AgentService) bool {
 	return !(reg.Kind == svc.Kind &&
 		reg.ID == svc.ID &&

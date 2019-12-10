@@ -3036,8 +3036,8 @@ func TestClientEndpoint_DeriveSIToken(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	s1 := TestServer(t, nil)
-	defer s1.Shutdown()
+	s1, cleanupS1 := TestServer(t, nil)
+	defer cleanupS1()
 
 	state := s1.fsm.State()
 	codec := rpcClient(t, s1)
