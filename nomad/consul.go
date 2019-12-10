@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/command/agent/consul"
+	"github.com/hashicorp/nomad/nomad/structs"
 
 	"golang.org/x/time/rate"
 )
@@ -43,8 +44,8 @@ func (sii ServiceIdentityIndex) Description() string {
 
 // ConsulACLsAPI is the consul/api.ACL API used by Nomad Server.
 type ConsulACLsAPI interface {
-	CreateToken(context.Context, ServiceIdentityIndex) (string, error)
-	RevokeTokens(context.Context, []ServiceIdentityIndex) error
+	CreateToken(context.Context, ServiceIdentityIndex) (*structs.SIToken, error)
+	RevokeTokens(context.Context, []string) error
 	ListTokens() ([]string, error) // used for reconciliation
 }
 
@@ -69,7 +70,7 @@ func NewConsulACLsAPI(aclClient consul.ACLsAPI, logger hclog.Logger) (ConsulACLs
 	return c, nil
 }
 
-func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityIndex) (string, error) {
+func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityIndex) (*structs.SIToken, error) {
 	defer metrics.MeasureSince([]string{"nomad", "consul", "create_token"}, time.Now())
 
 	// todo: is task already the sidecar name?
@@ -87,16 +88,36 @@ func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityInde
 
 	token, _, err := c.aclClient.TokenCreate(partial, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return token.SecretID, nil
+	return &structs.SIToken{
+		TaskName:   sii.TaskName,
+		AccessorID: token.AccessorID,
+		SecretID:   token.SecretID,
+	}, nil
 }
 
-func (c *consulACLsAPI) RevokeTokens(ctx context.Context, sii []ServiceIdentityIndex) error {
+func (c *consulACLsAPI) RevokeTokens(ctx context.Context, accessorIDs []string) error {
 	defer metrics.MeasureSince([]string{"nomad", "consul", "revoke_tokens"}, time.Now())
 
-	return errors.New("not yet implemented")
+	// todo: use ctx
+
+	// todo: rate limiting
+
+	for _, accessor := range accessorIDs {
+		if err := c.revokeToken(ctx, accessor); err != nil {
+			// todo: accumulate errors and IDs that are going to need another attempt
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *consulACLsAPI) revokeToken(ctx context.Context, accessorID string) error {
+	_, err := c.aclClient.TokenDelete(accessorID, nil)
+	return err
 }
 
 func (c *consulACLsAPI) ListTokens() ([]string, error) {

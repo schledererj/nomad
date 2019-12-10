@@ -111,9 +111,9 @@ func (m *MockACLsAPI) tokenCreate(token *api.ACLToken, _ *api.WriteOptions) (uin
 }
 
 // TokenDelete is a mock of ACLsAPI.TokenDelete
-func (m *MockACLsAPI) TokenDelete(tokenID string, opts *api.WriteOptions) (*api.WriteMeta, error) {
-	meta, err := m.tokenDelete(tokenID, opts)
-	m.logger.Trace("TokenDelete()", "secret", tokenID, "error", err)
+func (m *MockACLsAPI) TokenDelete(accessorID string, opts *api.WriteOptions) (*api.WriteMeta, error) {
+	meta, err := m.tokenDelete(accessorID, opts)
+	m.logger.Trace("TokenDelete()", "accessor", accessorID, "error", err)
 	return meta, err
 }
 
