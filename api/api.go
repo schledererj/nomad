@@ -178,6 +178,10 @@ type TLSConfig struct {
 	// the Nomad server SSL certificate.
 	CAPath string
 
+	// CAInMemCert is the PEM-encoded CA cert to use to verify the Nomad server
+	// SSL certificate.
+	CAInMemCert []byte
+
 	// ClientCert is the path to the certificate for Nomad communication
 	ClientCert string
 
@@ -250,6 +254,9 @@ func DefaultConfig() *Config {
 	}
 	if v := os.Getenv("NOMAD_CAPATH"); v != "" {
 		config.TLSConfig.CAPath = v
+	}
+	if v := os.Getenv("NOMAD_INMEMCERT"); v != "" {
+		config.TLSConfig.CAInMemCert = []byte(v)
 	}
 	if v := os.Getenv("NOMAD_CLIENT_CERT"); v != "" {
 		config.TLSConfig.ClientCert = v
@@ -348,8 +355,9 @@ func ConfigureTLS(httpClient *http.Client, tlsConfig *TLSConfig) error {
 
 	clientTLSConfig := httpClient.Transport.(*http.Transport).TLSClientConfig
 	rootConfig := &rootcerts.Config{
-		CAFile: tlsConfig.CACert,
-		CAPath: tlsConfig.CAPath,
+		CAFile:        tlsConfig.CACert,
+		CAPath:        tlsConfig.CAPath,
+		CACertificate: tlsConfig.CAInMemCert,
 	}
 	if err := rootcerts.ConfigureTLS(clientTLSConfig, rootConfig); err != nil {
 		return err
