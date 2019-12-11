@@ -3032,6 +3032,105 @@ func TestClientEndpoint_DeriveVaultToken_VaultError(t *testing.T) {
 	}
 }
 
+func TestClientEndpoint_tgUsesConnect(t *testing.T) {
+	t.Parallel()
+
+	try := func(t *testing.T, tg *structs.TaskGroup, exp bool) {
+		result := tgUsesConnect(tg)
+		require.Equal(t, exp, result)
+	}
+
+	t.Run("tg uses native", func(t *testing.T) {
+		try(t, &structs.TaskGroup{
+			Services: []*structs.Service{
+				{Connect: nil},
+				{Connect: &structs.ConsulConnect{Native: true}},
+			},
+		}, true)
+	})
+
+	t.Run("tg uses sidecar", func(t *testing.T) {
+		try(t, &structs.TaskGroup{
+			Services: []*structs.Service{{
+				Connect: &structs.ConsulConnect{
+					SidecarService: &structs.ConsulSidecarService{
+						Port: "9090",
+					},
+				},
+			}},
+		}, true)
+	})
+
+	t.Run("tg does not use connect", func(t *testing.T) {
+		try(t, &structs.TaskGroup{
+			Services: []*structs.Service{
+				{Connect: nil},
+			},
+		}, false)
+	})
+}
+
+func TestClientEndpoint_taskUsesConnect(t *testing.T) {
+	t.Parallel()
+
+	try := func(t *testing.T, task *structs.Task, exp bool) {
+		result := taskUsesConnect(task)
+		require.Equal(t, exp, result)
+	}
+
+	t.Run("task uses connect", func(t *testing.T) {
+		try(t, &structs.Task{
+			// see nomad.newConnectTask for how this works
+			Name: "connect-proxy-myservice",
+			Kind: "connect-proxy:myservice",
+		}, true)
+	})
+
+	t.Run("task does not use connect", func(t *testing.T) {
+		try(t, &structs.Task{
+			Name: "mytask",
+			Kind: "incorrect:mytask",
+		}, false)
+	})
+
+	t.Run("task does not exist", func(t *testing.T) {
+		try(t, nil, false)
+	})
+}
+
+func TestClientEndpoint_tasksNotUsingConnect(t *testing.T) {
+	t.Parallel()
+
+	taskGroup := &structs.TaskGroup{
+		Name: "testgroup",
+		Tasks: []*structs.Task{{
+			Name: "connect-proxy-service1",
+			Kind: "connect-proxy:service1",
+		}, {
+			Name: "incorrect-task3",
+			Kind: "incorrect:task3",
+		}, {
+			Name: "connect-proxy-service4",
+			Kind: "connect-proxy:service4",
+		}, {
+			Name: "incorrect-task5",
+			Kind: "incorrect:task5",
+		}},
+	}
+
+	requestingTasks := []string{
+		"connect-proxy-service1", // yes
+		"task2",                  // does not exist
+		"task3",                  // no
+		"connect-proxy-service4", // yes
+		"task5",                  // no
+	}
+
+	unneeded := tasksNotUsingConnect(taskGroup, requestingTasks)
+	exp := []string{"task2", "task3", "task5"}
+	require.Equal(t, exp, unneeded)
+}
+
 func mutateConnectJob(t *testing.T, job *structs.Job) {
 	var jch jobConnectHook
 	_, warnings, err := jch.Mutate(job)

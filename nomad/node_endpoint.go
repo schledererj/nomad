@@ -1655,30 +1655,65 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 		return nil
 	}
 
-	// make sure each task in args.Tasks is a connect-enabled task
+	// make sure task group contains at least one connect enabled service
 	tg := alloc.Job.LookupTaskGroup(alloc.TaskGroup)
 	if tg == nil {
 		setError(errors.Errorf("Allocation %q does not contain TaskGroup %q", args.AllocID, alloc.TaskGroup), false)
 		return nil
 	}
+	if !tgUsesConnect(tg) {
+		setError(errors.Errorf("TaskGroup %q does not use Connect", tg.Name), false)
+		return nil
+	}
 
-	fmt.Printf("@@ task group: %#v\n", tg)
-	// im guessing this just looks like a job spec.
+	// make sure each task in args.Tasks is a connect-enabled task
+	unneeded := tasksNotUsingConnect(tg, args.Tasks)
+	if len(unneeded) > 0 {
+		setError(fmt.Errorf(
+			"Requested Consul Service Identity tokens for tasks that are not Connect enabled: %v",
+			strings.Join(unneeded, ", "),
+		), false)
+	}
 
-	//for _, taskName := range args.Tasks {
-	//	// task := tg.LookupTask(taskName)
-	//	//	if task == nil {
-	//	//		setError(errors.Errorf("Allocation %q does not contain Task %q", args.AllocID, taskName), false) // what
-	//	//		return nil
-	//	// _ = task
-	//
-	//	// need to actually run this and see what an alloc is configured like
-	//
-	//}
+	// At this point the request is valid and we should contact Consul for tokens.
 
+	fmt.Println("YOU ARE HERE")
+
+	// error group for all or nothing, etc.
 	// todo: raftApply, etc
 
 	return nil
+}
+
+func tgUsesConnect(tg *structs.TaskGroup) bool {
+	for _, service := range tg.Services {
+		if service.Connect != nil {
+			if service.Connect.Native || service.Connect.SidecarService != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func tasksNotUsingConnect(tg *structs.TaskGroup, tasks []string) []string {
+	var unneeded []string
+	for _, task := range tasks {
+		tgTask := tg.LookupTask(task)
+		if !taskUsesConnect(tgTask) {
+			unneeded = append(unneeded, task)
+		}
+	}
+	return unneeded
+}
+
+func taskUsesConnect(task *structs.Task) bool {
+	if task == nil {
+		// not even in the task group
+		return false
+	}
+	// todo(shoenig): TBD what Kind does a native task have?
+	return task.Kind.IsConnectProxy()
 }
 
 func (n *Node) EmitEvents(args *structs.EmitNodeEventsRequest, reply *structs.EmitNodeEventsResponse) error {
