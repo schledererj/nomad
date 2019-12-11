@@ -9,6 +9,24 @@ type SIToken struct {
 	SecretID   string
 }
 
+// An SITokenAccessor is a reference to a created Service Identity token on
+// behalf of an allocation's task.
+type SITokenAccessor struct {
+	NodeID     string
+	AllocID    string
+	TaskName   string
+	AccessorID string
+
+	// Raft index
+	CreationIndex uint64
+}
+
+// SITokenAccessors is used to operate on a set of SITokenAccessor, like recording
+// a set of accessors for an alloc into raft.
+type SITokenAccessors struct {
+	Accessors []*SITokenAccessor
+}
+
 // DeriveSITokenRequest is used to request Consul Service Identity tokens from
 // the Nomad Server for the named tasks in the given allocation.
 type DeriveSITokenRequest struct {

@@ -1525,7 +1525,6 @@ func (n *Node) DeriveVaultToken(args *structs.DeriveVaultTokenRequest, reply *st
 			case input <- task:
 			}
 		}
-
 	}()
 
 	// Wait for everything to complete or for an error
@@ -1677,10 +1676,107 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 
 	// At this point the request is valid and we should contact Consul for tokens.
 
-	fmt.Println("YOU ARE HERE")
+	// A lot of the following is copied from DeriveVaultToken which has been
+	// working fine for years.
 
-	// error group for all or nothing, etc.
-	// todo: raftApply, etc
+	// Create an error group where we will spin up a fixed set of goroutines to
+	// handle deriving tokens but where if any fails the whole group is
+	// canceled.
+	g, ctx := errgroup.WithContext(context.Background())
+
+	// Cap the worker threads
+	numWorkers := len(args.Tasks)
+	if numWorkers > maxParallelRequestsPerDerive {
+		numWorkers = maxParallelRequestsPerDerive
+	}
+
+	// would like to pull some of this out...
+
+	// Create the SI tokens
+	input := make(chan string, numWorkers)
+	results := make(map[string]*structs.SIToken, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		g.Go(func() error {
+			for {
+				select {
+				case task, ok := <-input:
+					if !ok {
+						return nil
+					}
+					sii := ServiceIdentityIndex{ /*todo*/ }
+					secret, err := n.srv.consulACLs.CreateToken(ctx, sii)
+					if err != nil {
+						return err
+					}
+					results[task] = secret
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
+	}
+
+	// Send the input
+	go func() {
+		defer close(input)
+		for _, task := range args.Tasks {
+			select {
+			case <-ctx.Done():
+				return
+			case input <- task:
+			}
+		}
+	}()
+
+	// Wait for everything to complete or for an error
+	createErr := g.Wait()
+
+	// Gather the results (if there were errors, we need to know what to try to
+	// revoke anyway).
+	fmt.Println("createErr: ", createErr)
+
+	accessors := make([]*structs.SITokenAccessor, 0, len(results))
+	tokens := make(map[string]string, len(results))
+	for task, secret := range results {
+		tokens[task] = secret.SecretID
+		accessor := &structs.SITokenAccessor{
+			NodeID:     alloc.NodeID,
+			AllocID:    alloc.ID,
+			TaskName:   task,
+			AccessorID: secret.AccessorID,
+		}
+		accessors = append(accessors, accessor)
+	}
+
+	// todo: remove this, obviously
+	for task, secret := range results {
+		fmt.Printf("@ task %s -> %s\n", task, secret.AccessorID)
+	}
+
+	// If there was an error, revoke all created tokens.
+	if createErr != nil {
+		n.logger.Error("Consul Service Identity token creation for alloc failed", "alloc_id", alloc.ID, "error", createErr)
+		if revokeErr := n.srv.consulACLs.RevokeTokens(context.Background(), accessors); revokeErr != nil {
+			n.logger.Error("Consul Service Identity token revocation for alloc failed", "alloc_id", alloc.ID, "error", revokeErr)
+		}
+
+		if recoverable, ok := createErr.(*structs.RecoverableError); ok {
+			reply.Error = recoverable
+		} else {
+			reply.Error = structs.NewRecoverableError(createErr, false).(*structs.RecoverableError)
+		}
+
+		return nil
+	}
+
+	// Commit the derived tokens to raft before returning them
+	requested := structs.SITokenAccessors{Accessors: accessors}
+	// _, index, err := n.srv.raftApply(structs.S)
+	// now we need another new raft type! yay!
+
+	fmt.Println("YOU ARE HERE")
+	// todo:
+	//  and then write to raft, etc.
 
 	return nil
 }

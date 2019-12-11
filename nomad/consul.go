@@ -45,7 +45,7 @@ func (sii ServiceIdentityIndex) Description() string {
 // ConsulACLsAPI is the consul/api.ACL API used by Nomad Server.
 type ConsulACLsAPI interface {
 	CreateToken(context.Context, ServiceIdentityIndex) (*structs.SIToken, error)
-	RevokeTokens(context.Context, []string) error
+	RevokeTokens(context.Context, []*structs.SITokenAccessor) error
 	ListTokens() ([]string, error) // used for reconciliation
 }
 
@@ -98,14 +98,14 @@ func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityInde
 	}, nil
 }
 
-func (c *consulACLsAPI) RevokeTokens(ctx context.Context, accessorIDs []string) error {
+func (c *consulACLsAPI) RevokeTokens(ctx context.Context, accessors []*structs.SITokenAccessor) error {
 	defer metrics.MeasureSince([]string{"nomad", "consul", "revoke_tokens"}, time.Now())
 
 	// todo: use ctx
 
 	// todo: rate limiting
 
-	for _, accessor := range accessorIDs {
+	for _, accessor := range accessors {
 		if err := c.revokeToken(ctx, accessor); err != nil {
 			// todo: accumulate errors and IDs that are going to need another attempt
 			return err
@@ -115,8 +115,9 @@ func (c *consulACLsAPI) RevokeTokens(ctx context.Context, accessorIDs []string) 
 	return nil
 }
 
-func (c *consulACLsAPI) revokeToken(_ context.Context, accessorID string) error {
-	_, err := c.aclClient.TokenDelete(accessorID, nil)
+func (c *consulACLsAPI) revokeToken(_ context.Context, accessor *structs.SITokenAccessor) error {
+	c.logger.Trace("revoke SI token", "task", accessor.TaskName, "alloc_id", accessor.AllocID, "node_id", accessor.NodeID)
+	_, err := c.aclClient.TokenDelete(accessor.AccessorID, nil)
 	return err
 }
 
