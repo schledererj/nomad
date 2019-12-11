@@ -18,7 +18,7 @@ type SITokenAccessor struct {
 	TaskName   string
 
 	// Raft index
-	CreationIndex uint64
+	CreateIndex uint64
 }
 
 // SITokenAccessorsRequest is used to operate on a set of SITokenAccessor, like

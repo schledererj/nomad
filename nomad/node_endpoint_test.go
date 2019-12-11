@@ -3177,12 +3177,18 @@ func TestClientEndpoint_DeriveSIToken(t *testing.T) {
 	var response structs.DeriveSITokenResponse
 	err = msgpackrpc.CallWithCodec(codec, "Node.DeriveSIToken", request, &response)
 	r.NoError(err)
-	r.NoError(response.Error)
+	r.Nil(response.Error)
 
 	// Check the state store and ensure we created a Consul SI Token Accessor
-	//
-	// RPC does not write to raft yet, that is next!
-	r.Fail("not done yet")
+	ws := memdb.NewWatchSet()
+	accessors, err := state.SITokenAccessorsByNode(ws, node.ID)
+	r.NoError(err)
+	r.Equal(1, len(accessors))                                  // only asked for one
+	r.Equal("connect-proxy-testconnect", accessors[0].TaskName) // set by the mock
+	r.Equal(node.ID, accessors[0].NodeID)                       // should match
+	r.Equal(alloc.ID, accessors[0].AllocID)                     // should match
+	r.True(helper.IsUUID(accessors[0].AccessorID))              // should be set
+	r.GreaterOrEqual(accessors[0].CreateIndex, uint64(1))       // cannot be zero
 }
 
 func TestClientEndpoint_EmitEvents(t *testing.T) {

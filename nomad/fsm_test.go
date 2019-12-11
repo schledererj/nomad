@@ -1685,12 +1685,12 @@ func TestFSM_UpsertSITokenAccessor(t *testing.T) {
 	result1, err := fsm.State().SITokenAccessor(ws, a1.AccessorID)
 	r.NoError(err)
 	r.NotNil(result1)
-	r.Equal(uint64(1), result1.CreationIndex)
+	r.Equal(uint64(1), result1.CreateIndex)
 
 	result2, err := fsm.State().SITokenAccessor(ws, a2.AccessorID)
 	r.NoError(err)
 	r.NotNil(result2)
-	r.Equal(uint64(1), result2.CreationIndex)
+	r.Equal(uint64(1), result2.CreateIndex)
 
 	tt := fsm.TimeTable()
 	latestIndex := tt.NearestIndex(time.Now())

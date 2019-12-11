@@ -2581,7 +2581,7 @@ func (s *StateStore) UpsertSITokenAccessors(index uint64, accessors []*structs.S
 
 	for _, accessor := range accessors {
 		// set the create index
-		accessor.CreationIndex = index
+		accessor.CreateIndex = index
 
 		// insert the accessor
 		if err := txn.Insert(siTokenAccessorTable, accessor); err != nil {

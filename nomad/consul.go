@@ -33,9 +33,22 @@ const (
 )
 
 type ServiceIdentityIndex struct {
-	AllocID   string
 	ClusterID string
+	AllocID   string
 	TaskName  string
+}
+
+func (sii ServiceIdentityIndex) Validate() error {
+	switch {
+	case sii.ClusterID == "":
+		return errors.New("cluster id not set")
+	case sii.AllocID == "":
+		return errors.New("alloc id not set")
+	case sii.TaskName == "":
+		return errors.New("task name not set")
+	default:
+		return nil
+	}
 }
 
 func (sii ServiceIdentityIndex) Description() string {
@@ -73,9 +86,10 @@ func NewConsulACLsAPI(aclClient consul.ACLsAPI, logger hclog.Logger) (ConsulACLs
 func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityIndex) (*structs.SIToken, error) {
 	defer metrics.MeasureSince([]string{"nomad", "consul", "create_token"}, time.Now())
 
-	// todo: is task already the sidecar name?
-	//  think about native in the future!
-	siTaskName := "fixme-" + sii.TaskName
+	// sanity check the metadata for the token we want
+	if err := sii.Validate(); err != nil {
+		return nil, err
+	}
 
 	// todo: use ctx
 
@@ -83,7 +97,7 @@ func (c *consulACLsAPI) CreateToken(ctx context.Context, sii ServiceIdentityInde
 
 	partial := &api.ACLToken{
 		Description:       sii.Description(),
-		ServiceIdentities: []*api.ACLServiceIdentity{{ServiceName: siTaskName}},
+		ServiceIdentities: []*api.ACLServiceIdentity{{ServiceName: sii.TaskName}},
 	}
 
 	token, _, err := c.aclClient.TokenCreate(partial, nil)

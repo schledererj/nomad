@@ -1611,6 +1611,13 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 		return nil
 	}
 
+	// Get the ClusterID
+	clusterID, err := n.srv.ClusterID()
+	if err != nil {
+		setError(err, false)
+		return nil
+	}
+
 	// Verify the following:
 	// * The Node exists and has the correct SecretID.
 	// * The Allocation exists on the specified Node.
@@ -1703,7 +1710,11 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 					if !ok {
 						return nil
 					}
-					sii := ServiceIdentityIndex{ /*todo*/ }
+					sii := ServiceIdentityIndex{
+						ClusterID: clusterID,
+						AllocID:   alloc.ID,
+						TaskName:  task,
+					}
 					secret, err := n.srv.consulACLs.CreateToken(ctx, sii)
 					if err != nil {
 						return err
@@ -1731,10 +1742,6 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 	// Wait for everything to complete or for an error
 	createErr := g.Wait()
 
-	// Gather the results (if there were errors, we need to know what to try to
-	// revoke anyway).
-	fmt.Println("createErr: ", createErr)
-
 	accessors := make([]*structs.SITokenAccessor, 0, len(results))
 	tokens := make(map[string]string, len(results))
 	for task, secret := range results {
@@ -1746,11 +1753,6 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 			AccessorID: secret.AccessorID,
 		}
 		accessors = append(accessors, accessor)
-	}
-
-	// todo: remove this, obviously
-	for task, secret := range results {
-		fmt.Printf("@ task %s -> %s\n", task, secret.AccessorID)
 	}
 
 	// If there was an error, revoke all created tokens.
@@ -1771,14 +1773,24 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 
 	// Commit the derived tokens to raft before returning them
 	requested := structs.SITokenAccessorsRequest{Accessors: accessors}
-	_ = requested
-	// _, index, err := n.srv.raftApply(structs.S)
-	// now we need another new raft type! yay!
+	_, index, err := n.srv.raftApply(structs.ServiceIdentityAccessorRegisterRequestType, &requested)
+	if err != nil {
+		n.logger.Error("registering Service Identity token accessors for alloc failed", "alloc_id", alloc.ID, "error", err)
 
-	fmt.Println("YOU ARE HERE")
-	// todo:
-	//  and then write to raft, etc.
+		// Determine if we can recover from the error
+		retry := false
+		switch err {
+		case raft.ErrNotLeader, raft.ErrLeadershipLost, raft.ErrRaftShutdown, raft.ErrEnqueueTimeout:
+			retry = true
+		}
+		setError(err, retry)
+		return nil
+	}
 
+	// We made it! Now we can set the reply.
+	reply.Index = index
+	reply.Tokens = tokens
+	n.srv.setQueryMeta(&reply.QueryMeta)
 	return nil
 }
 
