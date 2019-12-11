@@ -6965,7 +6965,27 @@ func TestStateStore_SITokenAccessorsByNode(t *testing.T) {
 }
 
 func TestStateStore_RestoreSITokenAccessor(t *testing.T) {
-	t.Skip("todo")
+	t.Parallel()
+	r := require.New(t)
+
+	state := testStateStore(t)
+	a1 := mock.SITokenAccessor()
+
+	restore, err := state.Restore()
+	r.NoError(err)
+
+	err = restore.SITokenAccessorRestore(a1)
+	r.NoError(err)
+
+	restore.Commit()
+
+	ws := memdb.NewWatchSet()
+	result, err := state.SITokenAccessor(ws, a1.AccessorID)
+	r.NoError(err)
+	r.Equal(a1, result)
+
+	wsFired := watchFired(ws)
+	r.False(wsFired)
 }
 
 func TestStateStore_UpsertACLPolicy(t *testing.T) {

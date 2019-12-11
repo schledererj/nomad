@@ -4357,6 +4357,14 @@ func (r *StateRestore) VaultAccessorRestore(accessor *structs.VaultAccessor) err
 	return nil
 }
 
+// SITokenAccessorRestore is used to restore an SI token accessor
+func (r *StateRestore) SITokenAccessorRestore(accessor *structs.SITokenAccessor) error {
+	if err := r.txn.Insert(siTokenAccessorTable, accessor); err != nil {
+		return errors.Wrap(err, "si token accessor insert failed")
+	}
+	return nil
+}
+
 // ACLPolicyRestore is used to restore an ACL policy
 func (r *StateRestore) ACLPolicyRestore(policy *structs.ACLPolicy) error {
 	if err := r.txn.Insert("acl_policy", policy); err != nil {

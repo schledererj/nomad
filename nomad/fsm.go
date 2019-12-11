@@ -47,6 +47,7 @@ const (
 	ACLTokenSnapshot
 	SchedulerConfigSnapshot
 	ClusterMetadataSnapshot
+	ServiceIdentityTokenAccessorSnapshot
 )
 
 // LogApplier is the definition of a function that can apply a Raft log
@@ -256,9 +257,9 @@ func (n *nomadFSM) Apply(log *raft.Log) interface{} {
 	case structs.ClusterMetadataRequestType:
 		return n.applyClusterMetadata(buf[1:], log.Index)
 	case structs.ServiceIdentityAccessorRegisterRequestType:
-		return nil // todo
+		return n.applyUpsertSIAccessor(buf[1:], log.Index)
 	case structs.ServiceIdentityAccessorDeregisterRequestType:
-		return nil // todo
+		return n.applyDeregisterSIAccessor(buf[1:], log.Index)
 	}
 
 	// Check enterprise only message types.
@@ -877,13 +878,26 @@ func (n *nomadFSM) applyUpsertSIAccessor(buf []byte, index uint64) interface{} {
 		panic(errors.Wrap(err, "failed to decode request"))
 	}
 
-	// todo upsert
+	if err := n.state.UpsertSITokenAccessors(index, request.Accessors); err != nil {
+		n.logger.Error("UpsertSITokenAccessors failed", "error", err)
+		return err
+	}
 
 	return nil
 }
 
 func (n *nomadFSM) applyDeregisterSIAccessor(buf []byte, index uint64) interface{} {
-	// todo all
+	defer metrics.MeasureSince([]string{"nomad", "fsm", "deregister_si_accessor"}, time.Now())
+	var request structs.SITokenAccessorsRequest
+	if err := structs.Decode(buf, &request); err != nil {
+		panic(errors.Wrap(err, "failed to decode request"))
+	}
+
+	if err := n.state.DeleteSITokenAccessors(index, request.Accessors); err != nil {
+		n.logger.Error("DeregisterSITokenAccessor failed", "error", err)
+		return err
+	}
+
 	return nil
 }
 
@@ -1251,6 +1265,15 @@ func (n *nomadFSM) Restore(old io.ReadCloser) error {
 				return err
 			}
 
+		case ServiceIdentityTokenAccessorSnapshot:
+			accessor := new(structs.SITokenAccessor)
+			if err := dec.Decode(accessor); err != nil {
+				return err
+			}
+			if err := restore.SITokenAccessorRestore(accessor); err != nil {
+				return err
+			}
+
 		case JobVersionSnapshot:
 			version := new(structs.Job)
 			if err := dec.Decode(version); err != nil {
@@ -1555,6 +1578,10 @@ func (s *nomadSnapshot) Persist(sink raft.SnapshotSink) error {
 		sink.Cancel()
 		return err
 	}
+	if err := s.persistSITokenAccessors(sink, encoder); err != nil {
+		sink.Cancel()
+		return err
+	}
 	if err := s.persistJobVersions(sink, encoder); err != nil {
 		sink.Cancel()
 		return err
@@ -1796,6 +1823,23 @@ func (s *nomadSnapshot) persistVaultAccessors(sink raft.SnapshotSink,
 		accessor := raw.(*structs.VaultAccessor)
 
 		sink.Write([]byte{byte(VaultAccessorSnapshot)})
+		if err := encoder.Encode(accessor); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *nomadSnapshot) persistSITokenAccessors(sink raft.SnapshotSink, encoder *codec.Encoder) error {
+	ws := memdb.NewWatchSet()
+	accessors, err := s.snap.SITokenAccessors(ws)
+	if err != nil {
+		return err
+	}
+
+	for raw := accessors.Next(); raw != nil; raw = accessors.Next() {
+		accessor := raw.(*structs.SITokenAccessor)
+		sink.Write([]byte{byte(ServiceIdentityTokenAccessorSnapshot)})
 		if err := encoder.Encode(accessor); err != nil {
 			return err
 		}

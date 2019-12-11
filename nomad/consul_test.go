@@ -77,22 +77,29 @@ func TestConsulACLsAPI_RevokeTokens(t *testing.T) {
 		return context.Background(), c, generated
 	}
 
+	accessors := func(ids ...string) (result []*structs.SITokenAccessor) {
+		for _, id := range ids {
+			result = append(result, &structs.SITokenAccessor{AccessorID: id})
+		}
+		return
+	}
+
 	t.Run("revoke token success", func(t *testing.T) {
 		ctx, c, token := setup(nil)
-		err := c.RevokeTokens(ctx, []string{token.AccessorID})
+		err := c.RevokeTokens(ctx, accessors(token.AccessorID))
 		r.NoError(err)
 	})
 
 	t.Run("revoke token non-existent", func(t *testing.T) {
 		ctx, c, _ := setup(nil)
-		err := c.RevokeTokens(ctx, []string{uuid.Generate()})
+		err := c.RevokeTokens(ctx, accessors(uuid.Generate()))
 		r.EqualError(err, "token does not exist")
 	})
 
 	t.Run("revoke token error", func(t *testing.T) {
 		exp := errors.New("consul broke")
 		ctx, c, token := setup(exp)
-		err := c.RevokeTokens(ctx, []string{token.AccessorID})
+		err := c.RevokeTokens(ctx, accessors(token.AccessorID))
 		r.EqualError(err, exp.Error())
 	})
 }
