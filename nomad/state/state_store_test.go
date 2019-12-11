@@ -6889,6 +6889,7 @@ func TestStateStore_DeleteSITokenAccessors(t *testing.T) {
 
 func TestStateStore_SITokenAccessorsByAlloc(t *testing.T) {
 	t.Parallel()
+	r := require.New(t)
 
 	state := testStateStore(t)
 	alloc := mock.Alloc()
@@ -6908,8 +6909,63 @@ func TestStateStore_SITokenAccessorsByAlloc(t *testing.T) {
 		accessors = append(accessors, accessor)
 	}
 
-	_ = state
-	// todo: keep going!
+	err := state.UpsertSITokenAccessors(1000, accessors)
+	r.NoError(err)
+
+	ws := memdb.NewWatchSet()
+	result, err := state.SITokenAccessorsByAlloc(ws, alloc.ID)
+	r.NoError(err)
+	r.ElementsMatch(expected, result)
+
+	index, err := state.Index(siTokenAccessorTable)
+	r.NoError(err)
+	r.Equal(uint64(1000), index)
+
+	wsFired := watchFired(ws)
+	r.False(wsFired)
+}
+
+func TestStateStore_SITokenAccessorsByNode(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	state := testStateStore(t)
+	node := mock.Node()
+	var accessors []*structs.SITokenAccessor
+	var expected []*structs.SITokenAccessor
+	var err error
+
+	for i := 0; i < 5; i++ {
+		accessor := mock.SITokenAccessor()
+		accessor.NodeID = node.ID
+		expected = append(expected, accessor)
+		accessors = append(accessors, accessor)
+	}
+
+	for i := 0; i < 10; i++ {
+		accessor := mock.SITokenAccessor()
+		accessor.NodeID = uuid.Generate() // does not belong to node
+		accessors = append(accessors, accessor)
+	}
+
+	err = state.UpsertSITokenAccessors(1000, accessors)
+	r.NoError(err)
+
+	ws := memdb.NewWatchSet()
+	result, err := state.SITokenAccessorsByNode(ws, node.ID)
+	r.NoError(err)
+	r.ElementsMatch(expected, result)
+
+	index, err := state.Index(siTokenAccessorTable)
+	r.NoError(err)
+	r.Equal(uint64(1000), index)
+
+	wsFired := watchFired(ws)
+	r.False(wsFired)
+}
+
+func TestStateStore_RestoreSITokenAccessor(t *testing.T) {
+	t.Skip("todo")
 }
 
 func TestStateStore_UpsertACLPolicy(t *testing.T) {
