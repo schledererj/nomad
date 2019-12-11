@@ -386,11 +386,10 @@ func (s *HTTPServer) agentPprof(reqType profile.ReqType, resp http.ResponseWrite
 	if secondsParam == "" {
 		seconds = 1
 	} else {
-		sec, err := strconv.Atoi(secondsParam)
+		seconds, err = strconv.Atoi(secondsParam)
 		if err != nil {
 			return nil, CodedError(400, err.Error())
 		}
-		seconds = sec
 	}
 
 	// Create the request
