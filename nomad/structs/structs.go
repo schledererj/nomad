@@ -5729,7 +5729,7 @@ func (t *Task) Warnings() error {
 
 // TaskKind identifies the special kinds of tasks using the following format:
 // '<kind_name>(:<identifier>)`. The TaskKind can optionally include an identifier that
-// is opague to the Task. This identier can be used to relate the task to some
+// is opaque to the Task. This identifier can be used to relate the task to some
 // other entity based on the kind.
 //
 // For example, a task may have the TaskKind of `connect-proxy:service` where

@@ -1613,10 +1613,10 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 	}
 
 	// Verify the following:
-	// * The Node exists and has the correct SecretID
-	// * The Allocation exists on the specified Node
+	// * The Node exists and has the correct SecretID.
+	// * The Allocation exists on the specified Node.
 	// * The Allocation contains the given tasks, and each task requires a
-	// SI token
+	//   SI token.
 
 	snap, err := n.srv.fsm.State().Snapshot()
 	if err != nil {
@@ -1662,16 +1662,21 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 		return nil
 	}
 
-	// ugh this confusing mess
+	fmt.Printf("@@ task group: %#v\n", tg)
+	// im guessing this just looks like a job spec.
 
-	for _, taskName := range args.Tasks {
-		task := tg.LookupTask(taskName)
-		//	if task == nil {
-		//		setError(errors.Errorf("Allocation %q does not contain Task %q", args.AllocID, taskName), false) // what
-		//		return nil
-		_ = task
-		fmt.Println("@@ task:", task)
-	}
+	//for _, taskName := range args.Tasks {
+	//	// task := tg.LookupTask(taskName)
+	//	//	if task == nil {
+	//	//		setError(errors.Errorf("Allocation %q does not contain Task %q", args.AllocID, taskName), false) // what
+	//	//		return nil
+	//	// _ = task
+	//
+	//	// need to actually run this and see what an alloc is configured like
+	//
+	//}
+
+	// todo: raftApply, etc
 
 	return nil
 }

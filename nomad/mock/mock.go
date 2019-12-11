@@ -394,6 +394,9 @@ func ConnectJob() *structs.Job {
 			},
 		},
 	}
+	tg.Networks = structs.Networks{{
+		Mode: "bridge", // always bridge ... for now?
+	}}
 	return job
 }
 

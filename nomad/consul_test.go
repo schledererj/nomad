@@ -57,7 +57,7 @@ func TestConsulACLsAPI_CreateToken(t *testing.T) {
 }
 
 func TestConsulACLsAPI_RevokeTokens(t *testing.T) {
-	// t.Parallel()
+	t.Parallel()
 	r := require.New(t)
 
 	setup := func(exp error) (context.Context, ConsulACLsAPI, *structs.SIToken) {

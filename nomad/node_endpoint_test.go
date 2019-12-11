@@ -3032,23 +3032,58 @@ func TestClientEndpoint_DeriveVaultToken_VaultError(t *testing.T) {
 	}
 }
 
+func mutateConnectJob(t *testing.T, job *structs.Job) {
+	var jch jobConnectHook
+	_, warnings, err := jch.Mutate(job)
+	require.Empty(t, warnings)
+	require.NoError(t, err)
+}
+
 func TestClientEndpoint_DeriveSIToken(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	s1, cleanupS1 := TestServer(t, nil)
+	s1, cleanupS1 := TestServer(t, nil) // already sets consul mocks
 	defer cleanupS1()
 
 	state := s1.fsm.State()
 	codec := rpcClient(t, s1)
 	testutil.WaitForLeader(t, s1.RPC)
 
-	_ = state
-	_ = codec
-	_ = r
+	// Set allow unauthenticated (no operator token required)
 	s1.config.ConsulConfig.AllowUnauthenticated = helper.BoolToPtr(true)
-	// i want a consul client
-	// what does a server even have?
+
+	// Create the node
+	node := mock.Node()
+	err := state.UpsertNode(2, node)
+	r.NoError(err)
+
+	// Create an alloc with a typical connect service (sidecar) defined
+	alloc := mock.ConnectAlloc()
+	alloc.NodeID = node.ID
+	mutateConnectJob(t, alloc.Job) // appends sidecar task
+	sidecarTask := alloc.Job.TaskGroups[0].Tasks[1]
+
+	err = state.UpsertAllocs(3, []*structs.Allocation{alloc})
+	r.NoError(err)
+
+	request := &structs.DeriveSITokenRequest{
+		NodeID:       node.ID,
+		SecretID:     node.SecretID,
+		AllocID:      alloc.ID,
+		Tasks:        []string{sidecarTask.Name},
+		QueryOptions: structs.QueryOptions{Region: "global"},
+	}
+
+	var response structs.DeriveSITokenResponse
+	err = msgpackrpc.CallWithCodec(codec, "Node.DeriveSIToken", request, &response)
+	r.NoError(err)
+	r.NoError(response.Error)
+
+	// Check the state store and ensure we created a Consul SI Token Accessor
+	//
+	// RPC does not write to raft yet, that is next!
+	r.Fail("not done yet")
 }
 
 func TestClientEndpoint_EmitEvents(t *testing.T) {

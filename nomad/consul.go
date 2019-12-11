@@ -115,7 +115,7 @@ func (c *consulACLsAPI) RevokeTokens(ctx context.Context, accessorIDs []string) 
 	return nil
 }
 
-func (c *consulACLsAPI) revokeToken(ctx context.Context, accessorID string) error {
+func (c *consulACLsAPI) revokeToken(_ context.Context, accessorID string) error {
 	_, err := c.aclClient.TokenDelete(accessorID, nil)
 	return err
 }
