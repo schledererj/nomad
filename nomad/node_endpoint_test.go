@@ -3197,8 +3197,6 @@ func TestClientEndpoint_DeriveSIToken_ConsulError(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
-	_ = r // hello world
-
 	s1, cleanupS1 := TestServer(t, nil)
 	defer cleanupS1()
 	state := s1.fsm.State()
@@ -3221,10 +3219,13 @@ func TestClientEndpoint_DeriveSIToken_ConsulError(t *testing.T) {
 
 	// rejigger the server to use a broken mock consul
 	mockACLsAPI := consul.NewMockACLsAPI(s1.logger)
-	mockACLsAPI.SetError(errors.New("consul is broken"))
+	mockACLsAPI.SetError(structs.NewRecoverableError(errors.New("consul recoverable error"), true))
 	m, err := NewConsulACLsAPI(mockACLsAPI, s1.logger)
 	r.NoError(err)
 	s1.consulACLs = m
+
+	err = state.UpsertAllocs(3, []*structs.Allocation{alloc})
+	r.NoError(err)
 
 	request := &structs.DeriveSITokenRequest{
 		NodeID:       node.ID,
@@ -3234,9 +3235,11 @@ func TestClientEndpoint_DeriveSIToken_ConsulError(t *testing.T) {
 		QueryOptions: structs.QueryOptions{Region: "global"},
 	}
 
-	_ = request // do stuff
-
-	fmt.Println("YOU ARE HERE")
+	var response structs.DeriveSITokenResponse
+	err = msgpackrpc.CallWithCodec(codec, "Node.DeriveSIToken", request, &response)
+	r.NoError(err)
+	r.NotNil(response.Error)
+	r.True(response.Error.IsRecoverable())
 }
 
 func TestClientEndpoint_EmitEvents(t *testing.T) {
