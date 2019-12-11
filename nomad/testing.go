@@ -91,7 +91,7 @@ func TestServer(t testing.T, cb func(*Config)) (*Server, func()) {
 
 	catalog := consul.NewMockCatalog(config.Logger)
 
-	acls := consul.NewMockACLsAPI(config.Logger)
+	acls := consul.NewMockACLsAPI(config.Logger) // todo: need to be able to pass this in, with errors set, etc.
 
 	for i := 10; i >= 0; i-- {
 		// Get random ports, need to cleanup later

@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	memdb "github.com/hashicorp/go-memdb"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/hashicorp/nomad/acl"
+	"github.com/hashicorp/nomad/command/agent/consul"
 	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
@@ -3188,7 +3190,53 @@ func TestClientEndpoint_DeriveSIToken(t *testing.T) {
 	r.Equal(node.ID, accessors[0].NodeID)                       // should match
 	r.Equal(alloc.ID, accessors[0].AllocID)                     // should match
 	r.True(helper.IsUUID(accessors[0].AccessorID))              // should be set
-	r.GreaterOrEqual(accessors[0].CreateIndex, uint64(1))       // cannot be zero
+	r.Greater(accessors[0].CreateIndex, uint64(3))              // more than 3rd
+}
+
+func TestClientEndpoint_DeriveSIToken_ConsulError(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	_ = r // hello world
+
+	s1, cleanupS1 := TestServer(t, nil)
+	defer cleanupS1()
+	state := s1.fsm.State()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Set allow unauthenticated (no operator token required)
+	s1.config.ConsulConfig.AllowUnauthenticated = helper.BoolToPtr(true)
+
+	// Create the node
+	node := mock.Node()
+	err := state.UpsertNode(2, node)
+	r.NoError(err)
+
+	// Create an alloc with a typical connect service (sidecar) defined
+	alloc := mock.ConnectAlloc()
+	alloc.NodeID = node.ID
+	mutateConnectJob(t, alloc.Job) // appends sidecar task
+	sidecarTask := alloc.Job.TaskGroups[0].Tasks[1]
+
+	// rejigger the server to use a broken mock consul
+	mockACLsAPI := consul.NewMockACLsAPI(s1.logger)
+	mockACLsAPI.SetError(errors.New("consul is broken"))
+	m, err := NewConsulACLsAPI(mockACLsAPI, s1.logger)
+	r.NoError(err)
+	s1.consulACLs = m
+
+	request := &structs.DeriveSITokenRequest{
+		NodeID:       node.ID,
+		SecretID:     node.SecretID,
+		AllocID:      alloc.ID,
+		Tasks:        []string{sidecarTask.Name},
+		QueryOptions: structs.QueryOptions{Region: "global"},
+	}
+
+	_ = request // do stuff
+
+	fmt.Println("YOU ARE HERE")
 }
 
 func TestClientEndpoint_EmitEvents(t *testing.T) {
