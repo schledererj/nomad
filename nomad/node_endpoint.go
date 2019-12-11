@@ -1770,7 +1770,8 @@ func (n *Node) DeriveSIToken(args *structs.DeriveSITokenRequest, reply *structs.
 	}
 
 	// Commit the derived tokens to raft before returning them
-	requested := structs.SITokenAccessors{Accessors: accessors}
+	requested := structs.SITokenAccessorsRequest{Accessors: accessors}
+	_ = requested
 	// _, index, err := n.srv.raftApply(structs.S)
 	// now we need another new raft type! yay!
 

@@ -83,6 +83,8 @@ const (
 	SchedulerConfigRequestType
 	NodeBatchDeregisterRequestType
 	ClusterMetadataRequestType
+	ServiceIdentityAccessorRegisterRequestType
+	ServiceIdentityAccessorDeregisterRequestType
 )
 
 const (

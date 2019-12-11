@@ -6793,6 +6793,31 @@ func TestStateStore_RestoreVaultAccessor(t *testing.T) {
 	}
 }
 
+func TestStateStore_UpsertSITokenAccessors(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	state := testStateStore(t)
+	a1 := mock.SITokenAccessor()
+	a2 := mock.SITokenAccessor()
+
+	ws := memdb.NewWatchSet()
+	var err error
+
+	_, err = state.SITokenAccessor(ws, a1.AccessorID)
+	r.NoError(err)
+
+	_, err = state.SITokenAccessor(ws, a2.AccessorID)
+	r.NoError(err)
+
+	err = state.UpsertSITokenAccessors(1000, []*structs.SITokenAccessor{a1, a2})
+	r.NoError(err)
+
+	wsFired := watchFired(ws)
+	r.True(wsFired)
+
+}
+
 func TestStateStore_UpsertACLPolicy(t *testing.T) {
 	t.Parallel()
 

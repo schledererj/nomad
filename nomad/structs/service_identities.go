@@ -14,16 +14,16 @@ type SIToken struct {
 type SITokenAccessor struct {
 	NodeID     string
 	AllocID    string
-	TaskName   string
 	AccessorID string
+	TaskName   string
 
 	// Raft index
 	CreationIndex uint64
 }
 
-// SITokenAccessors is used to operate on a set of SITokenAccessor, like recording
-// a set of accessors for an alloc into raft.
-type SITokenAccessors struct {
+// SITokenAccessorsRequest is used to operate on a set of SITokenAccessor, like
+// recording a set of accessors for an alloc into raft.
+type SITokenAccessorsRequest struct {
 	Accessors []*SITokenAccessor
 }
 

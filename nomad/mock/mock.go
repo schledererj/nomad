@@ -822,6 +822,15 @@ func VaultAccessor() *structs.VaultAccessor {
 	}
 }
 
+func SITokenAccessor() *structs.SITokenAccessor {
+	return &structs.SITokenAccessor{
+		NodeID:     uuid.Generate(),
+		AllocID:    uuid.Generate(),
+		AccessorID: uuid.Generate(),
+		TaskName:   "foo",
+	}
+}
+
 func Deployment() *structs.Deployment {
 	return &structs.Deployment{
 		ID:             uuid.Generate(),

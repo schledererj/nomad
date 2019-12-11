@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/scheduler"
 	"github.com/hashicorp/raft"
+	"github.com/pkg/errors"
 	"github.com/ugorji/go/codec"
 )
 
@@ -254,6 +255,10 @@ func (n *nomadFSM) Apply(log *raft.Log) interface{} {
 		return n.applyDeregisterNodeBatch(buf[1:], log.Index)
 	case structs.ClusterMetadataRequestType:
 		return n.applyClusterMetadata(buf[1:], log.Index)
+	case structs.ServiceIdentityAccessorRegisterRequestType:
+		return nil // todo
+	case structs.ServiceIdentityAccessorDeregisterRequestType:
+		return nil // todo
 	}
 
 	// Check enterprise only message types.
@@ -862,6 +867,23 @@ func (n *nomadFSM) applyDeregisterVaultAccessor(buf []byte, index uint64) interf
 		return err
 	}
 
+	return nil
+}
+
+func (n *nomadFSM) applyUpsertSIAccessor(buf []byte, index uint64) interface{} {
+	defer metrics.MeasureSince([]string{"nomad", "fsm", "upsert_si_accessor"}, time.Now())
+	var request structs.SITokenAccessorsRequest
+	if err := structs.Decode(buf, &request); err != nil {
+		panic(errors.Wrap(err, "failed to decode request"))
+	}
+
+	// todo upsert
+
+	return nil
+}
+
+func (n *nomadFSM) applyDeregisterSIAccessor(buf []byte, index uint64) interface{} {
+	// todo all
 	return nil
 }
 
