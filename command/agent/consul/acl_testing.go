@@ -68,14 +68,14 @@ func (m *MockACLsAPI) TokenCreate(token *api.ACLToken, opts *api.WriteOptions) (
 			return "<nil>"
 		}
 		return token.AccessorID
-	}
+	}(created)
 
 	secret := func(token *api.ACLToken) string {
 		if token == nil {
 			return "<nil>"
 		}
 		return token.SecretID
-	}
+	}(created)
 
 	m.logger.Trace("TokenCreate()", "description", description, "service_identities", services, "accessor", accessor, "secret", secret, "index", index, "error", err)
 	return created, meta, err

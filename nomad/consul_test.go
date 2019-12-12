@@ -14,6 +14,30 @@ import (
 )
 
 var _ ConsulACLsAPI = (*consulACLsAPI)(nil)
+var _ ConsulACLsAPI = (*mockConsulACLsAPI)(nil)
+
+type mockConsulACLsAPI struct {
+	revokeRequests []string
+}
+
+func (m *mockConsulACLsAPI) CreateToken(
+	_ context.Context,
+	_ ServiceIdentityIndex) (*structs.SIToken, error) {
+	panic("not used yet")
+}
+
+func (m *mockConsulACLsAPI) RevokeTokens(
+	_ context.Context,
+	accessors []*structs.SITokenAccessor) error {
+	for _, accessor := range accessors {
+		m.revokeRequests = append(m.revokeRequests, accessor.AccessorID)
+	}
+	return nil
+}
+
+func (m *mockConsulACLsAPI) ListTokens() ([]string, error) {
+	panic("not used yet")
+}
 
 func TestConsulACLsAPI_CreateToken(t *testing.T) {
 	t.Parallel()

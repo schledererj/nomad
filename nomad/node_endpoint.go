@@ -333,16 +333,25 @@ func (n *Node) deregister(args *structs.NodeBatchDeregisterRequest,
 		}
 
 		// Determine if there are any Vault accessors on the node
-		accessors, err := snap.VaultAccessorsByNode(ws, nodeID)
-		if err != nil {
-			n.logger.Error("looking up accessors for node failed", "node_id", nodeID, "error", err)
+		if accessors, err := snap.VaultAccessorsByNode(ws, nodeID); err != nil {
+			n.logger.Error("looking up vault accessors for node failed", "node_id", nodeID, "error", err)
 			return err
+		} else if l := len(accessors); l > 0 {
+			n.logger.Debug("revoking vault accessors on node due to deregister", "num_accessors", l, "node_id", nodeID)
+			if err := n.srv.vault.RevokeTokens(context.Background(), accessors, true); err != nil {
+				n.logger.Error("revoking vault accessors for node failed", "node_id", nodeID, "error", err)
+				return err
+			}
 		}
 
-		if l := len(accessors); l != 0 {
-			n.logger.Debug("revoking accessors on node due to deregister", "num_accessors", l, "node_id", nodeID)
-			if err := n.srv.vault.RevokeTokens(context.Background(), accessors, true); err != nil {
-				n.logger.Error("revoking accessors for node failed", "node_id", nodeID, "error", err)
+		// Determine if there are any SI token accessors on the node
+		if accessors, err := snap.SITokenAccessorsByNode(ws, nodeID); err != nil {
+			n.logger.Error("looking up si accessors for node failed", "node_id", nodeID, "error", err)
+			return err
+		} else if l := len(accessors); l > 0 {
+			n.logger.Debug("revoking si accessors on node due to deregister", "num_accessors", l, "node_id", nodeID)
+			if err := n.srv.consulACLs.RevokeTokens(context.Background(), accessors); err != nil {
+				n.logger.Error("revoking si accessors for node failed", "node_id", nodeID, "error", err)
 				return err
 			}
 		}
@@ -445,17 +454,26 @@ func (n *Node) UpdateStatus(args *structs.NodeUpdateStatusRequest, reply *struct
 	// Check if we need to setup a heartbeat
 	switch args.Status {
 	case structs.NodeStatusDown:
-		// Determine if there are any Vault accessors on the node
-		accessors, err := n.srv.State().VaultAccessorsByNode(ws, args.NodeID)
-		if err != nil {
-			n.logger.Error("looking up accessors for node failed", "node_id", args.NodeID, "error", err)
+		// Determine if there are any Vault accessors on the node to cleanup
+		if accessors, err := n.srv.State().VaultAccessorsByNode(ws, args.NodeID); err != nil {
+			n.logger.Error("looking up vault accessors for node failed", "node_id", args.NodeID, "error", err)
 			return err
+		} else if l := len(accessors); l > 0 {
+			n.logger.Debug("revoking vault accessors on node due to down state", "num_accessors", l, "node_id", args.NodeID)
+			if err := n.srv.vault.RevokeTokens(context.Background(), accessors, true); err != nil {
+				n.logger.Error("revoking vault accessors for node failed", "node_id", args.NodeID, "error", err)
+				return err
+			}
 		}
 
-		if l := len(accessors); l != 0 {
-			n.logger.Debug("revoking accessors on node due to down state", "num_accessors", l, "node_id", args.NodeID)
-			if err := n.srv.vault.RevokeTokens(context.Background(), accessors, true); err != nil {
-				n.logger.Error("revoking accessors for node failed", "node_id", args.NodeID, "error", err)
+		// Determine if there are any SI token accessors on the node to cleanup
+		if accessors, err := n.srv.State().SITokenAccessorsByNode(ws, args.NodeID); err != nil {
+			n.logger.Error("looking up si accessors for node failed", "node_id", args.NodeID, "error", err)
+			return err
+		} else if l := len(accessors); l > 0 {
+			n.logger.Debug("revoking si accessors on node due to down state", "num_accessors", l, "node_id", args.NodeID)
+			if err := n.srv.consulACLs.RevokeTokens(context.Background(), accessors); err != nil {
+				n.logger.Error("revoking si accessors for node failed", "node_id", args.NodeID, "error", err)
 				return err
 			}
 		}
@@ -1175,30 +1193,53 @@ func (n *Node) batchUpdate(future *structs.BatchFuture, updates []*structs.Alloc
 		mErr.Errors = append(mErr.Errors, err)
 	}
 
-	// For each allocation we are updating check if we should revoke any
-	// Vault Accessors
-	var revoke []*structs.VaultAccessor
+	// For each allocation we are updating, check if we should revoke any
+	// - Vault token accessors
+	// - Service Identity token accessors
+	var (
+		revokeVault []*structs.VaultAccessor
+		revokeSI    []*structs.SITokenAccessor
+	)
+
 	for _, alloc := range updates {
 		// Skip any allocation that isn't dead on the client
 		if !alloc.Terminated() {
 			continue
 		}
 
-		// Determine if there are any Vault accessors for the allocation
 		ws := memdb.NewWatchSet()
-		accessors, err := n.srv.State().VaultAccessorsByAlloc(ws, alloc.ID)
-		if err != nil {
-			n.logger.Error("looking up Vault accessors for alloc failed", "alloc_id", alloc.ID, "error", err)
+
+		// Determine if there are any orphaned Vault accessors for the allocation
+		if accessors, err := n.srv.State().VaultAccessorsByAlloc(ws, alloc.ID); err != nil {
+			n.logger.Error("looking up vault accessors for alloc failed", "alloc_id", alloc.ID, "error", err)
 			mErr.Errors = append(mErr.Errors, err)
+		} else {
+			revokeVault = append(revokeVault, accessors...)
 		}
 
-		revoke = append(revoke, accessors...)
+		// Determine if there are any orphaned SI accessors for the allocation
+		if accessors, err := n.srv.State().SITokenAccessorsByAlloc(ws, alloc.ID); err != nil {
+			n.logger.Error("looking up si accessors for alloc failed", "alloc_id", alloc.ID, "error", err)
+			mErr.Errors = append(mErr.Errors, err)
+		} else {
+			revokeSI = append(revokeSI, accessors...)
+		}
 	}
 
-	if l := len(revoke); l != 0 {
-		n.logger.Debug("revoking accessors due to terminal allocations", "num_accessors", l)
-		if err := n.srv.vault.RevokeTokens(context.Background(), revoke, true); err != nil {
-			n.logger.Error("batched Vault accessor revocation failed", "error", err)
+	// Revoke any orphaned Vault accessors
+	if l := len(revokeVault); l > 0 {
+		n.logger.Debug("revoking vault accessors due to terminal allocations", "num_accessors", l)
+		if err := n.srv.vault.RevokeTokens(context.Background(), revokeVault, true); err != nil {
+			n.logger.Error("batched vault accessor revocation failed", "error", err)
+			mErr.Errors = append(mErr.Errors, err)
+		}
+	}
+
+	// Revoke any orphaned SI accessors
+	if l := len(revokeSI); l > 0 {
+		n.logger.Debug("revoking si accessors due to terminal allocations", "num_accessors", l)
+		if err := n.srv.consulACLs.RevokeTokens(context.Background(), revokeSI); err != nil {
+			n.logger.Error("batched si accessor revocation failed", "error", err)
 			mErr.Errors = append(mErr.Errors, err)
 		}
 	}
